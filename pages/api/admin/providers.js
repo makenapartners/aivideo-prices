@@ -1,0 +1,63 @@
+const { prisma } = require("../../../lib/prisma");
+const { requireAdmin } = require("../../../lib/admin-auth");
+
+// GET  /api/admin/providers        -> list all providers
+// POST /api/admin/providers        -> create a provider
+// PUT  /api/admin/providers?id=... -> update a provider
+// DELETE /api/admin/providers?id=... -> delete a provider
+module.exports = async function handler(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  if (req.method === "GET") {
+    const providers = await prisma.provider.findMany({ orderBy: { name: "asc" } });
+    return res.status(200).json({ providers });
+  }
+
+  if (req.method === "POST") {
+    const { name, kind, websiteUrl } = req.body || {};
+    if (!name || !kind || !websiteUrl) {
+      return res.status(400).json({ error: "name, kind, and websiteUrl are required" });
+    }
+    if (!["model_creator", "marketplace"].includes(kind)) {
+      return res.status(400).json({ error: "kind must be model_creator or marketplace" });
+    }
+    try {
+      const provider = await prisma.provider.create({ data: { name, kind, websiteUrl } });
+      return res.status(201).json({ provider });
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ error: "Could not create provider (name may already exist)" });
+    }
+  }
+
+  if (req.method === "PUT") {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: "id query param required" });
+    const { name, kind, websiteUrl } = req.body || {};
+    try {
+      const provider = await prisma.provider.update({
+        where: { id },
+        data: { name, kind, websiteUrl },
+      });
+      return res.status(200).json({ provider });
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ error: "Could not update provider" });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: "id query param required" });
+    try {
+      await prisma.provider.delete({ where: { id } });
+      return res.status(204).end();
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ error: "Could not delete provider (it may still have models or price entries attached)" });
+    }
+  }
+
+  res.setHeader("Allow", "GET, POST, PUT, DELETE");
+  return res.status(405).json({ error: "Method not allowed" });
+};

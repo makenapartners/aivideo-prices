@@ -1,0 +1,77 @@
+// AI Video Pricing Tracker — data model
+// Deliberately minimal (v1 scope): no pricing_history, no pricing_alerts,
+// no automated fetcher tables. Add those later only once manual
+// verification proves the data is worth automating.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon: use a pooled connection string for DATABASE_URL (the one with
+  // "-pooler" in the host name). If you ever need a second, direct
+  // (non-pooled) connection for migrations, Neon's console gives you that
+  // URL too — set it as DIRECT_URL and uncomment the line below.
+  // directUrl = env("DIRECT_URL")
+}
+
+enum ProviderKind {
+  model_creator
+  marketplace
+}
+
+enum EntryType {
+  direct
+  marketplace
+}
+
+enum InputType {
+  text
+  image
+  video
+}
+
+model Provider {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  kind        ProviderKind
+  websiteUrl  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  modelsCreated Model[]      @relation("ModelCreator")
+  priceEntries  PriceEntry[]
+}
+
+model Model {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  creator   Provider @relation("ModelCreator", fields: [creatorId], references: [id])
+  creatorId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  priceEntries PriceEntry[]
+}
+
+model PriceEntry {
+  id             String     @id @default(cuid())
+  model          Model      @relation(fields: [modelId], references: [id])
+  modelId        String
+  provider       Provider   @relation(fields: [providerId], references: [id])
+  providerId     String
+  entryType      EntryType
+  pricePerSecond Float?     // nullable — some pricing isn't per-second comparable
+  resolution     String?
+  hasAudio       Boolean    @default(false)
+  inputType      InputType?
+  sourceUrl      String     // required, always linkable
+  checkedAt      DateTime   // when a human last verified this
+  needsRecheck   Boolean    @default(false)
+  notes          String?    // free text for honesty caveats
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}

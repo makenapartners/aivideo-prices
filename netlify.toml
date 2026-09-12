@@ -1,0 +1,5 @@
+[build]
+  command = "npm run build"
+
+# Netlify auto-detects Next.js and installs the @netlify/plugin-nextjs
+# runtime for you — no manual functions config needed.
