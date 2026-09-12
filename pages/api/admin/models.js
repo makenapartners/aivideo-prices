@@ -17,11 +17,16 @@ module.exports = async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {
-    const models = await prisma.model.findMany({
-      include: { creator: true },
-      orderBy: { name: "asc" },
-    });
-    return res.status(200).json({ models });
+    try {
+      const models = await prisma.model.findMany({
+        include: { creator: true },
+        orderBy: { name: "asc" },
+      });
+      return res.status(200).json({ models });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to load models", detail: String(err.message || err) });
+    }
   }
 
   if (req.method === "POST") {

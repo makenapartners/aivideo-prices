@@ -9,8 +9,13 @@ module.exports = async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {
-    const providers = await prisma.provider.findMany({ orderBy: { name: "asc" } });
-    return res.status(200).json({ providers });
+    try {
+      const providers = await prisma.provider.findMany({ orderBy: { name: "asc" } });
+      return res.status(200).json({ providers });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to load providers", detail: String(err.message || err) });
+    }
   }
 
   if (req.method === "POST") {

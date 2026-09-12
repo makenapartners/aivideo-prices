@@ -10,11 +10,16 @@ module.exports = async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {
-    const priceEntries = await prisma.priceEntry.findMany({
-      include: { model: true, provider: true },
-      orderBy: { checkedAt: "desc" },
-    });
-    return res.status(200).json({ priceEntries });
+    try {
+      const priceEntries = await prisma.priceEntry.findMany({
+        include: { model: true, provider: true },
+        orderBy: { checkedAt: "desc" },
+      });
+      return res.status(200).json({ priceEntries });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to load price entries", detail: String(err.message || err) });
+    }
   }
 
   if (req.method === "POST") {
