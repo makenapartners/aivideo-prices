@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TABS = ["Providers", "Models", "Price Entries"];
+const TABS = ["Providers", "Models", "Price Entries", "Bulk Import"];
 
 function useAdminSecret() {
   const [secret, setSecret] = useState("");
@@ -85,6 +85,7 @@ export default function AdminPage() {
       {tab === "Providers" && <ProvidersTab secret={secret} />}
       {tab === "Models" && <ModelsTab secret={secret} />}
       {tab === "Price Entries" && <PriceEntriesTab secret={secret} />}
+      {tab === "Bulk Import" && <BulkImportTab secret={secret} />}
     </div>
   );
 }
@@ -563,6 +564,108 @@ function PriceEntriesTab({ secret }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function BulkImportTab({ secret }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setResult(null);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      setError(`Invalid JSON: ${err.message}`);
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.entries)) {
+      setError('JSON must be an object with an "entries" array, e.g. { "entries": [ {...}, {...} ] }');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const body = await api(secret, "/api/admin/price-entries/bulk", {
+        method: "POST",
+        body: JSON.stringify(parsed),
+      });
+      setResult(body);
+      if (body.failedCount === 0) {
+        setText("");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Bulk import</h2>
+      <p style={{ color: "#666", fontSize: 13, maxWidth: 640 }}>
+        Paste a JSON object with an <code>entries</code> array — each entry looks like a normal
+        price entry, but with <code>providerName</code> / <code>modelName</code> instead of IDs.
+        Providers and models that don't exist yet are created automatically (new providers need
+        <code> providerKind</code> and <code>providerWebsiteUrl</code> the first time they appear).
+        Nothing is deduped — re-pasting the same entries creates duplicate rows, so check the
+        results below before running the same file twice.
+      </p>
+      {error && <p style={styles.error}>{error}</p>}
+      <form onSubmit={submit} style={{ ...styles.form, flexDirection: "column", alignItems: "stretch" }}>
+        <textarea
+          style={{ ...styles.input, minHeight: 280, fontFamily: "monospace", fontSize: 12, width: "100%" }}
+          placeholder='{ "entries": [ { "providerName": "...", "modelName": "...", "entryType": "direct", "totalPrice": 0.3, "forDurationSeconds": 5, "sourceUrl": "https://...", "checkedAt": "2026-09-13" } ] }'
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div>
+          <button style={styles.button} type="submit" disabled={submitting || !text.trim()}>
+            {submitting ? "Importing…" : "Import"}
+          </button>
+        </div>
+      </form>
+      {result && (
+        <div style={{ marginTop: 8 }}>
+          <p>
+            <strong style={{ color: result.failedCount ? "#b00020" : "#0a7a0a" }}>
+              {result.createdCount} created, {result.failedCount} failed
+            </strong>
+          </p>
+          {result.created?.length > 0 && (
+            <details open={result.failedCount > 0}>
+              <summary>Created ({result.created.length})</summary>
+              <ul style={{ fontSize: 12 }}>
+                {result.created.map((c) => (
+                  <li key={c.id}>
+                    row {c.index}: {c.provider} — {c.model}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {result.failed?.length > 0 && (
+            <details open>
+              <summary style={{ color: "#b00020" }}>Failed ({result.failed.length})</summary>
+              <ul style={{ fontSize: 12 }}>
+                {result.failed.map((f, i) => (
+                  <li key={i} style={{ color: "#b00020" }}>
+                    row {f.index}: {f.errors.join("; ")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
     </div>
   );
 }
