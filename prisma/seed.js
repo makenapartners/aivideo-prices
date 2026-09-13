@@ -7,7 +7,14 @@
 // original research pass to re-verify and enter.
 
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { PrismaNeon } = require("@prisma/adapter-neon");
+const { neonConfig } = require("@neondatabase/serverless");
+const ws = require("ws");
+
+neonConfig.webSocketConstructor = ws;
+
+const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 
 async function upsertProvider({ name, kind, websiteUrl }) {
   return prisma.provider.upsert({

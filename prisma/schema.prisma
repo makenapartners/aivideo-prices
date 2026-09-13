@@ -4,11 +4,8 @@
 // verification proves the data is worth automating.
 
 generator client {
-  provider      = "prisma-client-js"
-  // Netlify Functions run on Amazon Linux 2023 (OpenSSL 3.0). Without this,
-  // Prisma only bundles the engine for your own machine's OS, and the
-  // deployed function fails to find a compatible database driver at runtime.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
