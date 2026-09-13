@@ -295,6 +295,7 @@ function PriceEntriesTab({ secret }) {
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
   const [error, setError] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({
     modelId: "",
     providerId: "",
@@ -352,7 +353,7 @@ function PriceEntriesTab({ secret }) {
   };
 
   const remove = async (id) => {
-    if (!confirm("Delete this price entry?")) return;
+    if (!confirm("Permanently delete this price entry? For a normal price change, use \"Mark superseded\" instead so the history is kept.")) return;
     try {
       await api(secret, `/api/admin/price-entries?id=${id}`, { method: "DELETE" });
       load();
@@ -361,9 +362,32 @@ function PriceEntriesTab({ secret }) {
     }
   };
 
+  const toggleSupersede = async (entry) => {
+    try {
+      await api(secret, `/api/admin/price-entries?id=${entry.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ supersededAt: entry.supersededAt ? false : true }),
+      });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const visibleEntries = showHistory ? entries : entries.filter((e) => !e.supersededAt);
+
   return (
     <div>
       <h2>Price entries</h2>
+      <p style={{ color: "#666", fontSize: 13, maxWidth: 640 }}>
+        When a price changes, click "Mark superseded" on the old row instead of deleting it — that
+        keeps it out of the public site but preserves it for history/reporting later. Delete is
+        for genuine mistakes and duplicates only.
+      </p>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
+        <input type="checkbox" checked={showHistory} onChange={(e) => setShowHistory(e.target.checked)} />
+        Show superseded (historical) entries
+      </label>
       {error && <p style={styles.error}>{error}</p>}
       <form onSubmit={submit} style={styles.form}>
         <select
@@ -516,14 +540,21 @@ function PriceEntriesTab({ secret }) {
             <th>Resolution</th>
             <th>Checked</th>
             <th>Valid</th>
+            <th>Superseded</th>
             <th>Source</th>
             <th>Notes</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {entries.map((e) => (
-            <tr key={e.id} style={e.needsRecheck ? { background: "#fff8e1" } : {}}>
+          {visibleEntries.map((e) => (
+            <tr
+              key={e.id}
+              style={{
+                ...(e.needsRecheck ? { background: "#fff8e1" } : {}),
+                ...(e.supersededAt ? { opacity: 0.55 } : {}),
+              }}
+            >
               <td>{e.model?.name}</td>
               <td>{e.provider?.name}</td>
               <td>{e.entryType === "direct" ? "Direct" : "Marketplace"}</td>
@@ -547,6 +578,9 @@ function PriceEntriesTab({ secret }) {
                     }`
                   : ""}
               </td>
+              <td style={{ fontSize: 11, color: "#666" }}>
+                {e.supersededAt ? new Date(e.supersededAt).toLocaleDateString() : "—"}
+              </td>
               <td>
                 <a href={e.sourceUrl} target="_blank" rel="noreferrer">
                   link
@@ -556,6 +590,9 @@ function PriceEntriesTab({ secret }) {
               <td style={{ whiteSpace: "nowrap" }}>
                 <button style={styles.linkButton} onClick={() => toggleRecheck(e)}>
                   {e.needsRecheck ? "Clear flag" : "Flag recheck"}
+                </button>{" "}
+                <button style={styles.linkButton} onClick={() => toggleSupersede(e)}>
+                  {e.supersededAt ? "Restore" : "Mark superseded"}
                 </button>{" "}
                 <button style={styles.linkButton} onClick={() => remove(e.id)}>
                   Delete

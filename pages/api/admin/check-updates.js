@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         });
         if (provider) {
           const entries = await prisma.priceEntry.findMany({
-            where: { providerId: provider.id },
+            where: { providerId: provider.id, supersededAt: null },
             include: { model: true },
             orderBy: { checkedAt: "desc" },
           });

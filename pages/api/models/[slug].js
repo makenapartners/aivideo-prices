@@ -20,7 +20,9 @@ export default async function handler(req, res) {
       where: { slug },
       include: {
         creator: true,
-        priceEntries: { include: { provider: true } },
+        // See lib/effective-price.js's counterpart note in models/index.js —
+        // supersededAt: null keeps historical rows out of the public API.
+        priceEntries: { where: { supersededAt: null }, include: { provider: true } },
       },
     });
 

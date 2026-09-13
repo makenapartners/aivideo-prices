@@ -119,6 +119,20 @@ export default async function handler(req, res) {
     if (body.validUntil !== undefined) {
       data.validUntil = body.validUntil ? new Date(body.validUntil) : null;
     }
+    // Null = current/live price, a date = historical (superseded on that
+    // date). Set this instead of deleting a row when a price changes, so
+    // history is preserved for future reporting. body.supersededAt can be
+    // an explicit date string, or true/false as a shorthand for "mark
+    // superseded right now" / "restore to current".
+    if (body.supersededAt !== undefined) {
+      if (body.supersededAt === true) {
+        data.supersededAt = new Date();
+      } else if (body.supersededAt === false || body.supersededAt === null || body.supersededAt === "") {
+        data.supersededAt = null;
+      } else {
+        data.supersededAt = new Date(body.supersededAt);
+      }
+    }
 
     try {
       const priceEntry = await prisma.priceEntry.update({ where: { id }, data });

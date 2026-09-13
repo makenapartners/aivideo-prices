@@ -121,6 +121,13 @@ model PriceEntry {
   checkedAt      DateTime   // when a human last verified this
   needsRecheck   Boolean    @default(false)
   notes          String?    // free text for honesty caveats
+  // Null = this is the current, live price shown on /prices. A date =
+  // this row was replaced on that date and is kept purely for history —
+  // never shown publicly, but never deleted either, so future reporting
+  // (price-change timelines, etc.) has real data to work with. Set this
+  // instead of deleting a row when a price changes; reserve actual
+  // deletion for genuine mistakes/duplicates.
+  supersededAt   DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }

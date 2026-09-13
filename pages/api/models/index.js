@@ -18,7 +18,11 @@ export default async function handler(req, res) {
     const models = await prisma.model.findMany({
       include: {
         creator: true,
-        priceEntries: { include: { provider: true } },
+        // supersededAt: null means "current, live price" — superseded
+        // (historical) rows are kept in the DB for reporting but never
+        // shown here, so this filter is what keeps the public site
+        // showing only today's actual prices.
+        priceEntries: { where: { supersededAt: null }, include: { provider: true } },
       },
       orderBy: { name: "asc" },
     });
