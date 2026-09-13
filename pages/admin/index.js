@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TABS = ["Providers", "Models", "Price Entries", "Bulk Import"];
+const TABS = ["Providers", "Models", "Price Entries", "Bulk Import", "Check Updates"];
 
 function useAdminSecret() {
   const [secret, setSecret] = useState("");
@@ -86,6 +86,7 @@ export default function AdminPage() {
       {tab === "Models" && <ModelsTab secret={secret} />}
       {tab === "Price Entries" && <PriceEntriesTab secret={secret} />}
       {tab === "Bulk Import" && <BulkImportTab secret={secret} />}
+      {tab === "Check Updates" && <CheckUpdatesTab secret={secret} />}
     </div>
   );
 }
@@ -665,6 +666,137 @@ function BulkImportTab({ secret }) {
             </details>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function CheckUpdatesTab({ secret }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [data, setData] = useState(null);
+  const [copiedFor, setCopiedFor] = useState("");
+
+  const runCheck = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const body = await api(secret, "/api/admin/check-updates");
+      setData(body);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyText = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedFor(key);
+      setTimeout(() => setCopiedFor(""), 1500);
+    } catch {
+      // clipboard API unavailable — nothing to do, text is still visible to select manually
+    }
+  };
+
+  const formatPrice = (e) => {
+    if (e.pricePerSecond != null) return `$${e.pricePerSecond}/sec`;
+    if (e.totalPrice != null && e.forDurationSeconds) {
+      return `$${e.totalPrice} for ${e.forDurationSeconds}s`;
+    }
+    return "—";
+  };
+
+  return (
+    <div>
+      <h2>Check for updates</h2>
+      <p style={{ color: "#666", fontSize: 13, maxWidth: 640 }}>
+        Fetches the 7 pricing pages this app can read directly and shows each one's live text next
+        to what's currently in the DB, so you can compare by eye. This does not parse or change
+        anything automatically — Kling and ByteDance/BytePlus aren't included here since both are
+        JS-rendered; keep checking those two by opening the pages yourself.
+      </p>
+      <button style={styles.button} onClick={runCheck} disabled={loading}>
+        {loading ? "Checking…" : "Run check"}
+      </button>
+      {error && <p style={styles.error}>{error}</p>}
+      {data && (
+        <>
+          <p style={{ color: "#888", fontSize: 12 }}>Checked at {new Date(data.checkedAt).toLocaleString()}</p>
+          {data.sources.map((source) => (
+            <div key={source.name} style={{ border: "1px solid #ddd", borderRadius: 6, padding: 12, marginTop: 16 }}>
+              <h3 style={{ margin: "0 0 4px" }}>{source.name}</h3>
+              {source.notes && <p style={{ color: "#888", fontSize: 12, margin: "0 0 8px" }}>{source.notes}</p>}
+
+              <strong style={{ fontSize: 13 }}>Current in DB</strong>
+              {source.currentEntries.length === 0 ? (
+                <p style={{ color: "#888", fontSize: 12 }}>No price entries for this provider yet.</p>
+              ) : (
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", margin: "4px 0 12px" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "#888" }}>
+                      <th>Model</th>
+                      <th>Type</th>
+                      <th>Resolution</th>
+                      <th>Price</th>
+                      <th>Checked</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {source.currentEntries.map((e) => (
+                      <tr key={e.id}>
+                        <td>{e.model}</td>
+                        <td>{e.entryType}</td>
+                        <td>{e.resolution || "—"}</td>
+                        <td>{formatPrice(e)}</td>
+                        <td>{new Date(e.checkedAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              <strong style={{ fontSize: 13 }}>Live page text</strong>
+              {source.fetched.map((f) => (
+                <div key={f.url} style={{ marginTop: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <a href={f.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+                      {f.url}
+                    </a>
+                    {f.text && (
+                      <button
+                        style={{ ...styles.button, padding: "2px 8px", fontSize: 12 }}
+                        onClick={() => copyText(f.url, f.text)}
+                      >
+                        {copiedFor === f.url ? "Copied" : "Copy text"}
+                      </button>
+                    )}
+                  </div>
+                  {f.error ? (
+                    <p style={styles.error}>Fetch failed: {f.error}</p>
+                  ) : (
+                    <details>
+                      <summary style={{ fontSize: 12, cursor: "pointer" }}>Show fetched text</summary>
+                      <pre
+                        style={{
+                          fontSize: 11,
+                          maxHeight: 300,
+                          overflow: "auto",
+                          background: "#f7f7f7",
+                          padding: 8,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {f.text}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </>
       )}
     </div>
   );
