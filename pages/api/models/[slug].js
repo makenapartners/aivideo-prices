@@ -1,8 +1,12 @@
 const { prisma } = require("../../../lib/prisma");
+const { sortEntriesByEffectivePrice } = require("../../../lib/effective-price");
 
 // GET /api/models/:slug
 // Returns one model's Direct and Marketplace entries for the
-// /prices/[model] page.
+// /prices/[model] page, each with a computed `effectivePricePerSecond`
+// field and sorted cheapest-first by that value (see
+// lib/effective-price.js for why a plain pricePerSecond sort doesn't work
+// for most rows).
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -16,10 +20,7 @@ export default async function handler(req, res) {
       where: { slug },
       include: {
         creator: true,
-        priceEntries: {
-          include: { provider: true },
-          orderBy: { pricePerSecond: "asc" },
-        },
+        priceEntries: { include: { provider: true } },
       },
     });
 
@@ -27,7 +28,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Model not found" });
     }
 
-    return res.status(200).json({ model });
+    const withSortedEntries = {
+      ...model,
+      priceEntries: sortEntriesByEffectivePrice(model.priceEntries),
+    };
+
+    return res.status(200).json({ model: withSortedEntries });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Failed to load model" });
