@@ -6,7 +6,7 @@ const { requireAdmin } = require("../../../lib/admin-auth");
 // PUT  /api/admin/price-entries?id=... -> update a price entry
 //        (use this to "mark as needing re-verification": send { needsRecheck: true })
 // DELETE /api/admin/price-entries?id=... -> delete a price entry
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {

@@ -5,7 +5,7 @@ const { requireAdmin } = require("../../../lib/admin-auth");
 // POST /api/admin/providers        -> create a provider
 // PUT  /api/admin/providers?id=... -> update a provider
 // DELETE /api/admin/providers?id=... -> delete a provider
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {

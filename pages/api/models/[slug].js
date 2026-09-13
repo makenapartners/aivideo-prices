@@ -3,7 +3,7 @@ const { prisma } = require("../../../lib/prisma");
 // GET /api/models/:slug
 // Returns one model's Direct and Marketplace entries for the
 // /prices/[model] page.
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });

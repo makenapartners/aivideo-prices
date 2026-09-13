@@ -3,7 +3,7 @@ const { prisma } = require("../../../lib/prisma");
 // GET /api/models
 // Returns all models with their price entries (direct + marketplace),
 // cheapest-first within each. This is the shape /prices consumes.
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });

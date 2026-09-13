@@ -13,7 +13,7 @@ function slugify(name) {
 // POST /api/admin/models        -> create a model
 // PUT  /api/admin/models?id=... -> update a model
 // DELETE /api/admin/models?id=... -> delete a model
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
   if (req.method === "GET") {
