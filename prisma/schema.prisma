@@ -34,6 +34,32 @@ enum InputType {
   video
 }
 
+// The full list of operations that turn out to have genuinely different
+// price tables, not just a modifier on one price — confirmed across
+// Luma (generate/edit/extend/reframe) and Kling (generate plus several
+// adjacent products bundled onto the same pricing page). "other" exists
+// for anything that doesn't fit cleanly yet, so entering real data is
+// never blocked on this enum being incomplete.
+enum OperationType {
+  generate
+  edit
+  extend
+  reframe
+  lip_sync
+  other
+}
+
+// Kling mixes per-second, per-request, and per-5-seconds billing on the
+// same pricing page for different rows — this used to be implicitly
+// assumed as "always per-second," which BytePlus and Kling both
+// contradict.
+enum BillingUnit {
+  per_second
+  per_video
+  per_request
+  per_5_seconds
+}
+
 model Provider {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -59,16 +85,38 @@ model Model {
 }
 
 model PriceEntry {
-  id             String     @id @default(cuid())
-  model          Model      @relation(fields: [modelId], references: [id])
+  id             String        @id @default(cuid())
+  model          Model         @relation(fields: [modelId], references: [id])
   modelId        String
-  provider       Provider   @relation(fields: [providerId], references: [id])
+  provider       Provider      @relation(fields: [providerId], references: [id])
   providerId     String
   entryType      EntryType
-  pricePerSecond Float?     // nullable — some pricing isn't per-second comparable
+  // Kept for the cases where it's actually true — Runway, xAI, and
+  // Google's Veo all confirmed real linear per-second scaling. Treat
+  // this as a DERIVED/display convenience for those cases, not as the
+  // source of truth for every row — see totalPrice below for the
+  // general case.
+  pricePerSecond Float?
+  // The actual source of truth for price: what a given operation
+  // costs, for a given duration, in one shot — no assumption that
+  // doubling the duration doubles the price. Luma's own page proves
+  // that assumption false (a 10s clip is 3x a 5s clip at 720p, not 2x).
+  // For per-request/per-video pricing, forDurationSeconds can be null.
+  totalPrice        Float?
+  forDurationSeconds Int?
+  billingUnit        BillingUnit   @default(per_second)
+  operationType      OperationType @default(generate)
   resolution     String?
   hasAudio       Boolean    @default(false)
   inputType      InputType?
+  // Nullable, separate from checkedAt below — checkedAt is when a human
+  // verified this row is accurate; validFrom/validUntil are for a
+  // provider's own stated promotional window (BytePlus's pricing page
+  // states exact discount expiration dates directly). A row can be
+  // accurately checked today and still be describing a price that's
+  // only valid until a known future date.
+  validFrom      DateTime?
+  validUntil     DateTime?
   sourceUrl      String     // required, always linkable
   checkedAt      DateTime   // when a human last verified this
   needsRecheck   Boolean    @default(false)

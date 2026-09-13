@@ -297,12 +297,18 @@ function PriceEntriesTab({ secret }) {
     modelId: "",
     providerId: "",
     entryType: "direct",
+    operationType: "generate",
+    billingUnit: "per_second",
     pricePerSecond: "",
+    totalPrice: "",
+    forDurationSeconds: "",
     resolution: "",
     hasAudio: false,
     inputType: "text",
     sourceUrl: "",
     checkedAt: new Date().toISOString().slice(0, 10),
+    validFrom: "",
+    validUntil: "",
     notes: "",
   });
 
@@ -322,12 +328,9 @@ function PriceEntriesTab({ secret }) {
     try {
       await api(secret, "/api/admin/price-entries", {
         method: "POST",
-        body: JSON.stringify({
-          ...form,
-          pricePerSecond: form.pricePerSecond === "" ? null : form.pricePerSecond,
-        }),
+        body: JSON.stringify(form),
       });
-      setForm({ ...form, pricePerSecond: "", resolution: "", sourceUrl: "", notes: "" });
+      setForm({ ...form, pricePerSecond: "", totalPrice: "", forDurationSeconds: "", resolution: "", sourceUrl: "", validFrom: "", validUntil: "", notes: "" });
       load();
     } catch (e) {
       setError(e.message);
@@ -395,11 +398,45 @@ function PriceEntriesTab({ secret }) {
           <option value="direct">Direct</option>
           <option value="marketplace">Marketplace</option>
         </select>
+        <select
+          style={styles.input}
+          value={form.operationType}
+          onChange={(e) => setForm({ ...form, operationType: e.target.value })}
+        >
+          <option value="generate">Generate</option>
+          <option value="edit">Edit</option>
+          <option value="extend">Extend</option>
+          <option value="reframe">Reframe</option>
+          <option value="lip_sync">Lip sync</option>
+          <option value="other">Other</option>
+        </select>
+        <select
+          style={styles.input}
+          value={form.billingUnit}
+          onChange={(e) => setForm({ ...form, billingUnit: e.target.value })}
+        >
+          <option value="per_second">Per second</option>
+          <option value="per_video">Per video</option>
+          <option value="per_request">Per request</option>
+          <option value="per_5_seconds">Per 5 seconds</option>
+        </select>
         <input
           style={styles.input}
-          placeholder="Price per second (leave blank if not comparable)"
+          placeholder="Price per second (only if truly linear — see notes)"
           value={form.pricePerSecond}
           onChange={(e) => setForm({ ...form, pricePerSecond: e.target.value })}
+        />
+        <input
+          style={styles.input}
+          placeholder="Total price for a specific duration (preferred — e.g. $0.30)"
+          value={form.totalPrice}
+          onChange={(e) => setForm({ ...form, totalPrice: e.target.value })}
+        />
+        <input
+          style={styles.input}
+          placeholder="For duration, in seconds (e.g. 5)"
+          value={form.forDurationSeconds}
+          onChange={(e) => setForm({ ...form, forDurationSeconds: e.target.value })}
         />
         <input
           style={styles.input}
@@ -438,6 +475,24 @@ function PriceEntriesTab({ secret }) {
           onChange={(e) => setForm({ ...form, checkedAt: e.target.value })}
           required
         />
+        <label style={{ display: "flex", flexDirection: "column", fontSize: 11, color: "#666" }}>
+          Valid from (optional — for known promo windows)
+          <input
+            style={styles.input}
+            type="date"
+            value={form.validFrom}
+            onChange={(e) => setForm({ ...form, validFrom: e.target.value })}
+          />
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", fontSize: 11, color: "#666" }}>
+          Valid until (optional)
+          <input
+            style={styles.input}
+            type="date"
+            value={form.validUntil}
+            onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
+          />
+        </label>
         <textarea
           style={{ ...styles.input, minHeight: 60 }}
           placeholder="Notes (e.g. 'price varies by region', 'credit-based, converted at X rate')"
@@ -454,8 +509,11 @@ function PriceEntriesTab({ secret }) {
             <th>Model</th>
             <th>Provider</th>
             <th>Type</th>
-            <th>$/sec</th>
+            <th>Operation</th>
+            <th>Price</th>
+            <th>Resolution</th>
             <th>Checked</th>
+            <th>Valid</th>
             <th>Source</th>
             <th>Notes</th>
             <th></th>
@@ -467,8 +525,26 @@ function PriceEntriesTab({ secret }) {
               <td>{e.model?.name}</td>
               <td>{e.provider?.name}</td>
               <td>{e.entryType === "direct" ? "Direct" : "Marketplace"}</td>
-              <td>{e.pricePerSecond != null ? `$${e.pricePerSecond}` : "—"}</td>
+              <td>{e.operationType !== "generate" ? e.operationType : ""}</td>
+              <td>
+                {e.totalPrice != null
+                  ? `$${e.totalPrice} / ${e.forDurationSeconds ?? "?"}s`
+                  : e.pricePerSecond != null
+                    ? `$${e.pricePerSecond}/sec`
+                    : "—"}
+                {e.billingUnit !== "per_second" && e.totalPrice == null && (
+                  <span style={{ color: "#888" }}> ({e.billingUnit})</span>
+                )}
+              </td>
+              <td>{e.resolution || "—"}</td>
               <td>{new Date(e.checkedAt).toLocaleDateString()}</td>
+              <td style={{ fontSize: 11, color: "#666" }}>
+                {e.validFrom || e.validUntil
+                  ? `${e.validFrom ? new Date(e.validFrom).toLocaleDateString() : "…"} – ${
+                      e.validUntil ? new Date(e.validUntil).toLocaleDateString() : "…"
+                    }`
+                  : ""}
+              </td>
               <td>
                 <a href={e.sourceUrl} target="_blank" rel="noreferrer">
                   link

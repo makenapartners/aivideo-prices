@@ -28,11 +28,17 @@ export default async function handler(req, res) {
       providerId,
       entryType,
       pricePerSecond,
+      totalPrice,
+      forDurationSeconds,
+      billingUnit,
+      operationType,
       resolution,
       hasAudio,
       inputType,
       sourceUrl,
       checkedAt,
+      validFrom,
+      validUntil,
       notes,
     } = req.body || {};
 
@@ -51,12 +57,19 @@ export default async function handler(req, res) {
           modelId,
           providerId,
           entryType,
-          pricePerSecond: pricePerSecond != null ? parseFloat(pricePerSecond) : null,
+          pricePerSecond: pricePerSecond != null && pricePerSecond !== "" ? parseFloat(pricePerSecond) : null,
+          totalPrice: totalPrice != null && totalPrice !== "" ? parseFloat(totalPrice) : null,
+          forDurationSeconds:
+            forDurationSeconds != null && forDurationSeconds !== "" ? parseInt(forDurationSeconds, 10) : null,
+          billingUnit: billingUnit || undefined, // falls back to schema default (per_second) if omitted
+          operationType: operationType || undefined, // falls back to schema default (generate) if omitted
           resolution: resolution || null,
           hasAudio: !!hasAudio,
           inputType: inputType || null,
           sourceUrl,
           checkedAt: new Date(checkedAt),
+          validFrom: validFrom ? new Date(validFrom) : null,
+          validUntil: validUntil ? new Date(validUntil) : null,
           notes: notes || null,
         },
       });
@@ -76,6 +89,8 @@ export default async function handler(req, res) {
       "modelId",
       "providerId",
       "entryType",
+      "billingUnit",
+      "operationType",
       "resolution",
       "hasAudio",
       "inputType",
@@ -86,10 +101,23 @@ export default async function handler(req, res) {
       if (body[key] !== undefined) data[key] = body[key];
     }
     if (body.pricePerSecond !== undefined) {
-      data.pricePerSecond = body.pricePerSecond === null ? null : parseFloat(body.pricePerSecond);
+      data.pricePerSecond = body.pricePerSecond === null || body.pricePerSecond === "" ? null : parseFloat(body.pricePerSecond);
+    }
+    if (body.totalPrice !== undefined) {
+      data.totalPrice = body.totalPrice === null || body.totalPrice === "" ? null : parseFloat(body.totalPrice);
+    }
+    if (body.forDurationSeconds !== undefined) {
+      data.forDurationSeconds =
+        body.forDurationSeconds === null || body.forDurationSeconds === "" ? null : parseInt(body.forDurationSeconds, 10);
     }
     if (body.checkedAt !== undefined) {
       data.checkedAt = new Date(body.checkedAt);
+    }
+    if (body.validFrom !== undefined) {
+      data.validFrom = body.validFrom ? new Date(body.validFrom) : null;
+    }
+    if (body.validUntil !== undefined) {
+      data.validUntil = body.validUntil ? new Date(body.validUntil) : null;
     }
 
     try {
