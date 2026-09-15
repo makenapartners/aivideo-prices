@@ -10,8 +10,19 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      const providers = await prisma.provider.findMany({ orderBy: { name: "asc" } });
-      return res.status(200).json({ providers });
+      const providers = await prisma.provider.findMany({
+        orderBy: { name: "asc" },
+        include: { sourceChecks: { orderBy: { checkedAt: "desc" }, take: 1 } },
+      });
+      // Same field the public API exposes on creator — surfaced here too so
+      // admin shows exactly what a consumer of the API sees, not something
+      // you have to go hit /api/models to verify.
+      const withLastChecked = providers.map((p) => ({
+        ...p,
+        lastCheckedAt: p.sourceChecks[0]?.checkedAt ?? null,
+        sourceChecks: undefined,
+      }));
+      return res.status(200).json({ providers: withLastChecked });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Failed to load providers", detail: String(err.message || err) });

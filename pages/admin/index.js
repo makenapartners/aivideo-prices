@@ -165,6 +165,7 @@ function ProvidersTab({ secret }) {
             <th>Name</th>
             <th>Kind</th>
             <th>Website</th>
+            <th>Last checked</th>
             <th></th>
           </tr>
         </thead>
@@ -177,6 +178,9 @@ function ProvidersTab({ secret }) {
                 <a href={p.websiteUrl} target="_blank" rel="noreferrer">
                   {p.websiteUrl}
                 </a>
+              </td>
+              <td style={{ fontSize: 12, color: p.lastCheckedAt ? "inherit" : "#b45309" }}>
+                {p.lastCheckedAt ? new Date(p.lastCheckedAt).toLocaleDateString() : "Never checked"}
               </td>
               <td>
                 <button style={styles.linkButton} onClick={() => remove(p.id)}>
