@@ -70,6 +70,25 @@ model Provider {
 
   modelsCreated Model[]      @relation("ModelCreator")
   priceEntries  PriceEntry[]
+  sourceChecks  SourceCheck[]
+}
+
+// A log of "we re-checked this provider's pricing page" events — separate
+// from PriceEntry.checkedAt (which is when a specific PRICE was verified)
+// because a check can come back with zero changes, and that's still worth
+// recording: it's what lets /prices honestly say "last verified Sept 14"
+// even when the underlying price hasn't moved in months. One row per
+// check event per provider, not per price row.
+model SourceCheck {
+  id           String   @id @default(cuid())
+  provider     Provider @relation(fields: [providerId], references: [id])
+  providerId   String
+  sourceLabel  String   // human label for what was checked, e.g. "xAI (Grok Imagine)"
+  checkedAt    DateTime @default(now())
+  changesFound Boolean  @default(false)
+  notes        String?  @db.Text
+
+  @@index([providerId])
 }
 
 model Model {

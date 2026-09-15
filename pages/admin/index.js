@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TABS = ["Providers", "Models", "Price Entries", "Bulk Import", "Check Updates"];
+const TABS = ["Providers", "Models", "Price Entries", "Bulk Import", "Check Updates", "Log Check"];
 
 function useAdminSecret() {
   const [secret, setSecret] = useState("");
@@ -87,6 +87,7 @@ export default function AdminPage() {
       {tab === "Price Entries" && <PriceEntriesTab secret={secret} />}
       {tab === "Bulk Import" && <BulkImportTab secret={secret} />}
       {tab === "Check Updates" && <CheckUpdatesTab secret={secret} />}
+      {tab === "Log Check" && <LogCheckTab secret={secret} />}
     </div>
   );
 }
@@ -713,6 +714,8 @@ function CheckUpdatesTab({ secret }) {
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [copiedFor, setCopiedFor] = useState("");
+  const [logging, setLogging] = useState("");
+  const [logged, setLogged] = useState({});
 
   const runCheck = async () => {
     setLoading(true);
@@ -720,10 +723,34 @@ function CheckUpdatesTab({ secret }) {
     try {
       const body = await api(secret, "/api/admin/check-updates");
       setData(body);
+      setLogged({});
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const logCheck = async (source, changesFound) => {
+    setLogging(source.name);
+    try {
+      await api(secret, "/api/admin/source-checks", {
+        method: "POST",
+        body: JSON.stringify({
+          checks: [
+            {
+              providerName: source.providerName,
+              sourceLabel: source.name,
+              changesFound,
+            },
+          ],
+        }),
+      });
+      setLogged((prev) => ({ ...prev, [source.name]: changesFound ? "changes" : "clean" }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLogging("");
     }
   };
 
@@ -765,6 +792,31 @@ function CheckUpdatesTab({ secret }) {
             <div key={source.name} style={{ border: "1px solid #ddd", borderRadius: 6, padding: 12, marginTop: 16 }}>
               <h3 style={{ margin: "0 0 4px" }}>{source.name}</h3>
               {source.notes && <p style={{ color: "#888", fontSize: 12, margin: "0 0 8px" }}>{source.notes}</p>}
+
+              <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 12px" }}>
+                {logged[source.name] ? (
+                  <span style={{ fontSize: 12, color: logged[source.name] === "clean" ? "#0a7a0a" : "#b45309" }}>
+                    Logged: {logged[source.name] === "clean" ? "no changes" : "changes found"}
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      style={{ ...styles.button, padding: "2px 8px", fontSize: 12 }}
+                      disabled={logging === source.name}
+                      onClick={() => logCheck(source, false)}
+                    >
+                      No changes found
+                    </button>
+                    <button
+                      style={{ ...styles.linkButton, fontSize: 12 }}
+                      disabled={logging === source.name}
+                      onClick={() => logCheck(source, true)}
+                    >
+                      Changes found (after you've updated the entries)
+                    </button>
+                  </>
+                )}
+              </div>
 
               <strong style={{ fontSize: 13 }}>Current in DB</strong>
               {source.currentEntries.length === 0 ? (
@@ -834,6 +886,107 @@ function CheckUpdatesTab({ secret }) {
             </div>
           ))}
         </>
+      )}
+    </div>
+  );
+}
+
+function LogCheckTab({ secret }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setResult(null);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      setError(`Invalid JSON: ${err.message}`);
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.checks)) {
+      setError('JSON must be an object with a "checks" array, e.g. { "checks": [ {...}, {...} ] }');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const body = await api(secret, "/api/admin/source-checks", {
+        method: "POST",
+        body: JSON.stringify(parsed),
+      });
+      setResult(body);
+      if (body.failedCount === 0) {
+        setText("");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Log check</h2>
+      <p style={{ color: "#666", fontSize: 13, maxWidth: 640 }}>
+        Paste a JSON object with a <code>checks</code> array to retroactively record that a
+        provider's pricing was re-checked — used for checks done outside the app (e.g. in chat)
+        instead of through the Check Updates button. Each entry needs <code>providerName</code>
+        {" "}(must already exist) and <code>sourceLabel</code>; <code>changesFound</code> and{" "}
+        <code>notes</code> are optional.
+      </p>
+      {error && <p style={styles.error}>{error}</p>}
+      <form onSubmit={submit} style={{ ...styles.form, flexDirection: "column", alignItems: "stretch" }}>
+        <textarea
+          style={{ ...styles.input, minHeight: 220, fontFamily: "monospace", fontSize: 12, width: "100%" }}
+          placeholder='{ "checks": [ { "providerName": "xAI", "sourceLabel": "xAI (Grok Imagine)", "changesFound": false, "notes": "..." } ] }'
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div>
+          <button style={styles.button} type="submit" disabled={submitting || !text.trim()}>
+            {submitting ? "Logging…" : "Log checks"}
+          </button>
+        </div>
+      </form>
+      {result && (
+        <div style={{ marginTop: 8 }}>
+          <p>
+            <strong style={{ color: result.failedCount ? "#b00020" : "#0a7a0a" }}>
+              {result.createdCount} logged, {result.failedCount} failed
+            </strong>
+          </p>
+          {result.created?.length > 0 && (
+            <details open={result.failedCount > 0}>
+              <summary>Logged ({result.created.length})</summary>
+              <ul style={{ fontSize: 12 }}>
+                {result.created.map((c) => (
+                  <li key={c.id}>
+                    row {c.index}: {c.provider}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {result.failed?.length > 0 && (
+            <details open>
+              <summary style={{ color: "#b00020" }}>Failed ({result.failed.length})</summary>
+              <ul style={{ fontSize: 12 }}>
+                {result.failed.map((f, i) => (
+                  <li key={i} style={{ color: "#b00020" }}>
+                    row {f.index}: {f.errors.join("; ")}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
     </div>
   );

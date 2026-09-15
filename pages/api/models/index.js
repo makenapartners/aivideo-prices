@@ -17,7 +17,11 @@ export default async function handler(req, res) {
   try {
     const models = await prisma.model.findMany({
       include: {
-        creator: true,
+        creator: {
+          include: {
+            sourceChecks: { orderBy: { checkedAt: "desc" }, take: 1 },
+          },
+        },
         // supersededAt: null means "current, live price" — superseded
         // (historical) rows are kept in the DB for reporting but never
         // shown here, so this filter is what keeps the public site
@@ -29,6 +33,14 @@ export default async function handler(req, res) {
 
     const withSortedEntries = models.map((m) => ({
       ...m,
+      creator: {
+        ...m.creator,
+        // Flattened for convenience: the most recent check of this
+        // provider's pricing, whether or not it found a change. Null if
+        // this provider has never had a check logged yet.
+        lastCheckedAt: m.creator.sourceChecks[0]?.checkedAt ?? null,
+        sourceChecks: undefined,
+      },
       priceEntries: sortEntriesByEffectivePrice(m.priceEntries),
     }));
 

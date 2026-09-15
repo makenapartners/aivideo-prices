@@ -19,7 +19,11 @@ export default async function handler(req, res) {
     const model = await prisma.model.findUnique({
       where: { slug },
       include: {
-        creator: true,
+        creator: {
+          include: {
+            sourceChecks: { orderBy: { checkedAt: "desc" }, take: 1 },
+          },
+        },
         // See lib/effective-price.js's counterpart note in models/index.js —
         // supersededAt: null keeps historical rows out of the public API.
         priceEntries: { where: { supersededAt: null }, include: { provider: true } },
@@ -32,6 +36,11 @@ export default async function handler(req, res) {
 
     const withSortedEntries = {
       ...model,
+      creator: {
+        ...model.creator,
+        lastCheckedAt: model.creator.sourceChecks[0]?.checkedAt ?? null,
+        sourceChecks: undefined,
+      },
       priceEntries: sortEntriesByEffectivePrice(model.priceEntries),
     };
 
