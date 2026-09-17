@@ -1,5 +1,6 @@
 const { prisma } = require("../../../lib/prisma");
 const { sortEntriesByEffectivePrice } = require("../../../lib/effective-price");
+const { applyPublicCors } = require("../../../lib/cors");
 
 // GET /api/models
 // Returns all models with their price entries (direct + marketplace).
@@ -7,8 +8,11 @@ const { sortEntriesByEffectivePrice } = require("../../../lib/effective-price");
 // priceEntries within each model are sorted cheapest-first by that value
 // (see lib/effective-price.js for why this can't just be an `orderBy` on
 // pricePerSecond — most rows don't have that field set). This is the
-// shape /prices consumes.
+// shape /prices consumes. Public and CORS-open (see lib/cors.js) — safe
+// to call from any frontend, including a client-side-only prototype.
 export default async function handler(req, res) {
+  if (applyPublicCors(req, res)) return;
+
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
     return res.status(405).json({ error: "Method not allowed" });

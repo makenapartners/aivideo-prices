@@ -11,6 +11,34 @@ const { CHECK_SOURCES } = require("../../../lib/check-sources-config");
 // changed. This does NOT parse numbers or touch the database; it's a
 // reading aid, not an auto-updater. Kling and ByteDance are excluded —
 // both are JS-rendered and stay a manual open-the-page step.
+// Per-fetch timeout — without this, one slow or hanging page can block
+// the entire batch until Netlify's own platform-level function timeout
+// kills the whole request (a 502, with zero results returned for any
+// source, even the ones that responded fine). Failing a single slow URL
+// fast, on its own, is much better than losing everything.
+const FETCH_TIMEOUT_MS = 6000;
+
+async function fetchWithTimeout(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      headers: { "User-Agent": "aivideo-prices-check/1.0" },
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      return { url, error: `HTTP ${resp.status}` };
+    }
+    const html = await resp.text();
+    return { url, text: htmlToText(html) };
+  } catch (err) {
+    const timedOut = err.name === "AbortError";
+    return { url, error: timedOut ? `Timed out after ${FETCH_TIMEOUT_MS / 1000}s` : String(err.message || err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req, res) {
   if (!requireAdmin(req, res)) return;
 
@@ -49,22 +77,7 @@ export default async function handler(req, res) {
         console.error(`DB lookup failed for provider "${source.providerName}"`, err);
       }
 
-      const fetched = await Promise.all(
-        source.urls.map(async (url) => {
-          try {
-            const resp = await fetch(url, {
-              headers: { "User-Agent": "aivideo-prices-check/1.0" },
-            });
-            if (!resp.ok) {
-              return { url, error: `HTTP ${resp.status}` };
-            }
-            const html = await resp.text();
-            return { url, text: htmlToText(html) };
-          } catch (err) {
-            return { url, error: String(err.message || err) };
-          }
-        })
-      );
+      const fetched = await Promise.all(source.urls.map((url) => fetchWithTimeout(url)));
 
       return {
         name: source.name,
