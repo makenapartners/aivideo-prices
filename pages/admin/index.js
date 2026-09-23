@@ -357,6 +357,18 @@ function PriceEntriesTab({ secret }) {
     }
   };
 
+  const toggleAudio = async (entry) => {
+    try {
+      await api(secret, `/api/admin/price-entries?id=${entry.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ hasAudio: !entry.hasAudio }),
+      });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const remove = async (id) => {
     if (!confirm("Permanently delete this price entry? For a normal price change, use \"Mark superseded\" instead so the history is kept.")) return;
     try {
@@ -595,6 +607,9 @@ function PriceEntriesTab({ secret }) {
               <td style={{ whiteSpace: "nowrap" }}>
                 <button style={styles.linkButton} onClick={() => toggleRecheck(e)}>
                   {e.needsRecheck ? "Clear flag" : "Flag recheck"}
+                </button>{" "}
+                <button style={styles.linkButton} onClick={() => toggleAudio(e)}>
+                  {e.hasAudio ? "Unset audio" : "Set audio"}
                 </button>{" "}
                 <button style={styles.linkButton} onClick={() => toggleSupersede(e)}>
                   {e.supersededAt ? "Restore" : "Mark superseded"}
