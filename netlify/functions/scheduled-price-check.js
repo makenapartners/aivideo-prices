@@ -34,12 +34,19 @@ async function fetchWithTimeout(url) {
 async function runAutomatedCheck() {
   const results = [];
 
-  for (const source of CHECK_SOURCES) {
+  // Each source runs independently and concurrently -- with 10 sources,
+  // each involving a page fetch plus a full LLM call, running them one
+  // at a time was taking long enough to hit Netlify's function timeout
+  // before finishing (observed: killed at exactly 60s with no error
+  // logged, since a timeout kills the process outright rather than
+  // throwing a catchable exception). Concurrent execution brings total
+  // wall-clock time down to roughly "however long the slowest single
+  // source takes" instead of the sum of all ten.
+  async function checkOneSource(source) {
     try {
       const provider = await prisma.provider.findUnique({ where: { name: source.providerName } });
       if (!provider) {
-        results.push({ source: source.name, status: "error", error: `No provider named "${source.providerName}" exists` });
-        continue;
+        return { source: source.name, status: "error", error: `No provider named "${source.providerName}" exists` };
       }
 
       const liveEntries = await prisma.priceEntry.findMany({
@@ -74,8 +81,7 @@ async function runAutomatedCheck() {
               .join("; ")}`,
           },
         });
-        results.push({ source: source.name, status: "fetch_failed" });
-        continue;
+        return { source: source.name, status: "fetch_failed" };
       }
 
       const diff = await callClaudeForPriceDiff({
@@ -130,12 +136,15 @@ async function runAutomatedCheck() {
         });
       }
 
-      results.push({ source: source.name, status: "ok", changes: diff.changes.length });
+      return { source: source.name, status: "ok", changes: diff.changes.length };
     } catch (err) {
       console.error(`Automated check failed for "${source.name}":`, err);
-      results.push({ source: source.name, status: "error", error: String(err.message || err) });
+      return { source: source.name, status: "error", error: String(err.message || err) };
     }
   }
+
+  const allResults = await Promise.all(CHECK_SOURCES.map(checkOneSource));
+  results.push(...allResults);
 
   return results;
 }
