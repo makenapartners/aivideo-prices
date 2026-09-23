@@ -56,18 +56,20 @@ export default async function handler(req, res) {
           },
         });
 
-        // A clean check ("no changes found") means every live price for
-        // this provider was just re-verified, even though none of them
-        // changed — so their own checkedAt should reflect that too, not
-        // just the SourceCheck log. If changes WERE found, leave the rows
-        // alone: those get updated individually via Mark superseded + a
-        // fresh entry, same as any other price change.
-        if (!c.changesFound) {
-          await prisma.priceEntry.updateMany({
-            where: { providerId: provider.id, supersededAt: null },
-            data: { checkedAt: check.checkedAt },
-          });
-        }
+        // Every logged check means "as of right now, I've reviewed this
+        // provider's current pricing" — whether that review found new
+        // data to add (changesFound: true) or nothing had moved
+        // (changesFound: false). Either way, every live price row for
+        // this provider gets its checkedAt refreshed to match: rows that
+        // were part of a "changes found" batch already carry their own
+        // explicit checkedAt from that import, so this is a no-op for
+        // them; rows that weren't part of the batch (the rest of the
+        // provider's existing, reconfirmed-accurate pricing) are what
+        // this actually needs to catch up.
+        await prisma.priceEntry.updateMany({
+          where: { providerId: provider.id, supersededAt: null },
+          data: { checkedAt: check.checkedAt },
+        });
 
         created.push({ index: i, id: check.id, provider: provider.name });
       } catch (err) {

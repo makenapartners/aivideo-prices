@@ -3,3 +3,9 @@
 
 # Netlify auto-detects Next.js and installs the @netlify/plugin-nextjs
 # runtime for you — no manual functions config needed.
+
+[functions]
+  directory = "netlify/functions"
+  # Explicit directory declaration -- this is where the scheduled price
+  # check (netlify/functions/scheduled-price-check.js) lives, separate
+  # from the Next.js app's own API routes in pages/api/.

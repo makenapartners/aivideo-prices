@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const TABS = ["Providers", "Models", "Price Entries", "Bulk Import", "Check Updates", "Log Check"];
+const TABS = ["Providers", "Models", "Price Entries", "Bulk Import", "Check Updates", "Log Check", "Review Queue"];
 
 function useAdminSecret() {
   const [secret, setSecret] = useState("");
@@ -88,6 +88,7 @@ export default function AdminPage() {
       {tab === "Bulk Import" && <BulkImportTab secret={secret} />}
       {tab === "Check Updates" && <CheckUpdatesTab secret={secret} />}
       {tab === "Log Check" && <LogCheckTab secret={secret} />}
+      {tab === "Review Queue" && <ReviewQueueTab secret={secret} />}
     </div>
   );
 }
@@ -1007,6 +1008,140 @@ function LogCheckTab({ secret }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReviewQueueTab({ secret }) {
+  const [proposals, setProposals] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [resolving, setResolving] = useState("");
+  const [showResolved, setShowResolved] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const body = await api(secret, `/api/admin/review-queue?status=${showResolved ? "approved" : "pending"}`);
+      setProposals(body.proposals);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showResolved]);
+
+  const resolve = async (id, action) => {
+    setResolving(id);
+    try {
+      await api(secret, `/api/admin/review-queue/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ action }),
+      });
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setResolving("");
+    }
+  };
+
+  const formatPrice = (d) => {
+    if (!d) return "—";
+    if (d.pricePerSecond != null) return `$${d.pricePerSecond}/sec`;
+    if (d.totalPrice != null && d.forDurationSeconds) return `$${d.totalPrice} for ${d.forDurationSeconds}s`;
+    return "—";
+  };
+
+  return (
+    <div>
+      <h2>Review queue</h2>
+      <p style={{ color: "#666", fontSize: 13, maxWidth: 640 }}>
+        Proposals from the automated check (runs every 3 days) or from any automated run you've
+        triggered. Nothing here has touched the live price data yet — approving is the only action
+        that writes anything. Rejecting just dismisses it; the underlying price stays as-is.
+      </p>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, margin: "8px 0" }}>
+        <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
+        Show already-approved (history)
+      </label>
+      {error && <p style={styles.error}>{error}</p>}
+      {loading && <p style={{ color: "#888" }}>Loading…</p>}
+      {!loading && proposals.length === 0 && (
+        <p style={{ color: "#888", fontSize: 13 }}>
+          {showResolved ? "Nothing approved yet." : "Nothing pending — the queue is clear."}
+        </p>
+      )}
+      {proposals.map((p) => (
+        <div key={p.id} style={{ border: "1px solid #ddd", borderRadius: 6, padding: 12, marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+            <div>
+              <strong>{p.modelName}</strong> <span style={{ color: "#888" }}>— {p.provider?.name}</span>{" "}
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: p.changeType === "price_change" ? "#fff8e1" : "#e8f5e9",
+                }}
+              >
+                {p.changeType === "price_change" ? "price change" : "new entry"}
+              </span>{" "}
+              {p.confidence === "low" && (
+                <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 4, background: "#fdecea", color: "#b00020" }}>
+                  low confidence — double-check
+                </span>
+              )}
+            </div>
+            {p.status === "pending" && (
+              <div style={{ whiteSpace: "nowrap" }}>
+                <button
+                  style={styles.button}
+                  disabled={resolving === p.id}
+                  onClick={() => resolve(p.id, "approve")}
+                >
+                  Approve
+                </button>{" "}
+                <button
+                  style={styles.linkButton}
+                  disabled={resolving === p.id}
+                  onClick={() => resolve(p.id, "reject")}
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 24, marginTop: 8, fontSize: 13 }}>
+            {p.changeType === "price_change" && (
+              <div>
+                <div style={{ color: "#888" }}>Current</div>
+                <div>{formatPrice(p.oldEntry)}</div>
+                {p.oldEntry?.resolution && <div style={{ color: "#888" }}>{p.oldEntry.resolution}</div>}
+              </div>
+            )}
+            <div>
+              <div style={{ color: "#888" }}>{p.changeType === "price_change" ? "Proposed" : "New"}</div>
+              <div>{formatPrice(p.proposedData)}</div>
+              {p.proposedData?.resolution && <div style={{ color: "#888" }}>{p.proposedData.resolution}</div>}
+            </div>
+          </div>
+
+          {p.explanation && <p style={{ fontSize: 12, color: "#555", marginTop: 8 }}>{p.explanation}</p>}
+          {p.proposedData?.sourceUrl && (
+            <a href={p.proposedData.sourceUrl} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+              source
+            </a>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

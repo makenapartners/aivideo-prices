@@ -71,6 +71,7 @@ model Provider {
   modelsCreated Model[]      @relation("ModelCreator")
   priceEntries  PriceEntry[]
   sourceChecks  SourceCheck[]
+  proposedChanges ProposedChange[]
 }
 
 // A log of "we re-checked this provider's pricing page" events — separate
@@ -78,7 +79,8 @@ model Provider {
 // because a check can come back with zero changes, and that's still worth
 // recording: it's what lets /prices honestly say "last verified Sept 14"
 // even when the underlying price hasn't moved in months. One row per
-// check event per provider, not per price row.
+// check event per provider, not per price row. Used by both manual
+// (Log Check tab) and automated (scheduled function) checks.
 model SourceCheck {
   id           String   @id @default(cuid())
   provider     Provider @relation(fields: [providerId], references: [id])
@@ -88,6 +90,41 @@ model SourceCheck {
   changesFound Boolean  @default(false)
   notes        String?  @db.Text
 
+  proposedChanges ProposedChange[]
+
+  @@index([providerId])
+}
+
+// A single AI-proposed price change or addition, awaiting human review.
+// Never applied automatically — approving one is what actually writes to
+// PriceEntry (creating a new row, and superseding the old one if this is
+// a price_change rather than a new_entry). This is the human-in-the-loop
+// checkpoint that keeps the automated check from being able to fabricate
+// or silently overwrite a price.
+model ProposedChange {
+  id              String       @id @default(cuid())
+  sourceCheck     SourceCheck  @relation(fields: [sourceCheckId], references: [id], onDelete: Cascade)
+  sourceCheckId   String
+  provider        Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId      String
+  changeType      String       // "new_entry" | "price_change"
+  modelName       String
+  modelSlug       String
+  entryType       String       // "direct" | "marketplace"
+  proposedData    Json         // full entry payload, same shape as a Bulk Import entry
+  // Deliberately a plain field, not a formal relation — this ID is
+  // resolved by matching the proposal against current live entries at
+  // proposal-creation time (see lib/anthropic.js), not trusted from the
+  // AI's own output, and a formal FK would complicate the case where the
+  // referenced row gets deleted before this proposal is reviewed.
+  oldPriceEntryId String?
+  confidence      String       @default("high") // "high" | "low" — the AI's own confidence, so a human can prioritize review
+  explanation     String?      @db.Text
+  status          String       @default("pending") // "pending" | "approved" | "rejected"
+  createdAt       DateTime     @default(now())
+  resolvedAt      DateTime?
+
+  @@index([status])
   @@index([providerId])
 }
 
