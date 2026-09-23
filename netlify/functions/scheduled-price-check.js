@@ -141,11 +141,13 @@ async function runAutomatedCheck() {
 }
 
 // Runs every 3 days at 15:00 UTC. Change the cron string below to adjust
-// cadence -- e.g. "0 15 * * *" for daily.
-const handler = schedule("0 15 */3 * *", async () => {
+// cadence -- e.g. "0 15 * * *" for daily. Netlify's bundler statically
+// analyzes this file for a schedule(...) call feeding directly into
+// exports.handler -- it has to be written inline like this, not built up
+// via an intermediate variable, or the bundler can't detect it and the
+// build fails at the Functions-bundling step (not the Next.js build).
+exports.handler = schedule("0 15 */3 * *", async () => {
   const results = await runAutomatedCheck();
   console.log("Automated price check results:", JSON.stringify(results));
   return { statusCode: 200 };
 });
-
-module.exports = { handler };
